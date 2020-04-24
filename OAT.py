@@ -1,17 +1,21 @@
 # Modules
-import arcpy
+import arcpy, sys
 from arcpy import env
 from arcpy.sa import *
+from arcpy.da import *
 arcpy.CheckOutExtension("Spatial")
 arcpy.env.overwriteOutput = True
 # Workspace
 arcpy.env.workspace = r'' ##User-defined workspace
 
 # Raster locations - user-defined.
-landforms = Raster(arcpy.env.workspace+'')
-proximity = Raster(arcpy.env.workspace+'')
-TWE = Raster(arcpy.env.workspace+'')
-windIndex = Raster(arcpy.env.workspace+'')
+landforms = Raster(arcpy.env.workspace+'\\'+'fzLandformsTPI.tif')
+proximity = Raster(arcpy.env.workspace+'\\'+'fzProxPoll.tif')
+TWE = Raster(arcpy.env.workspace+'\\'+'fzTWE.tif')
+windIndex = Raster(arcpy.env.workspace+'\\'+'fzWindIndex.tif')
+
+# Location of reclass table
+remap = arcpy.env.workspace+'\\00Remap.csv' # User-defined...see 'remap.csv' in Git repo for formatting
 
 # Populate tuples of rasters and weights.
 rtups = (
@@ -47,4 +51,19 @@ for pct in range(-20, 21, 5):
         r3 = orasterlist[3]*senslist[3]
         # Overlay rasters
         overlay = r0+r1+r2+r3
-        overlay.save(str(orasterlist[0])[:-4]+str(pct)+'.tif')
+        # Reclassify overlay by table
+        outreclass = ReclassByTable(overlay, remap, "FROM", "TO", "OUTPUT")
+        # Return pixel counts falling into each respective group
+        # Use SearchCursor to populate new table
+        arcpy.BuildRasterAttributeTable_management(outreclass, "Overwrite")
+        outfile = open(arcpy.env.workspace+'\\00test.txt', 'a')        # Rewrite this to automatically generate output table in workspace directory
+        rows = arcpy.SearchCursor(outreclass, "", "", "Value;Count", "")
+        outfile.write(str(orasterlist[0])[len(arcpy.env.workspace)+1:-4] + str(pct) + ",")
+        for row in rows:
+            val = row.getValue("Value")
+            count = row.getValue("Count")
+            print val,count
+            outfile.write(str(count) + ",")
+        outfile.write("\n")
+        outfile.close()
+
